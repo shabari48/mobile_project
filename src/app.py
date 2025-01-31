@@ -56,7 +56,8 @@ categories = {
 # Streamlit app layout
 st.title("Phone Price Prediction and Recommendation System")
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Price Prediction", "Phone Recommendations"])
+page = st.sidebar.radio("Go to", ["Price Prediction", "Phone Recommendations", "EMI Calculator"])
+
 
 if page == "Price Prediction":
 
@@ -95,16 +96,13 @@ if page == "Price Prediction":
     n_ram = ram_mapping[ram]
 
     # Predict button
-    if st.button("Predict Price"):
+    if st.button("Predict Price",icon="🔮"):
         
-        # Add animation using streamlit's progress bar
         progress_bar = st.progress(0)
-        status_text = st.empty()
 
         for i in range(100):
-            progress_bar.progress(i + 1)
-            status_text.text(f"We are choosing the best mobiles for you... {i + 1}%")
-            time.sleep(0.01)  # Simulate some processing time'
+            progress_bar.progress(i + 1,text=f"We are choosing the best mobiles for you... {i + 1}%")
+            time.sleep(0.02) 
             
         input_data = pd.DataFrame({
             "Battery Power(in mAh)": [battery],
@@ -144,10 +142,8 @@ if page == "Price Prediction":
         similar_phones = data[data["Cluster"] == input_data_cluster]
         
         similar_phones_copy = similar_phones.copy()
-        # Sort the similar phones based on ratings
         similar_phones_copy["Price_Difference"] = abs(similar_phones["Price"] - predicted_price)
-        
-        # Fill NaNs in Ratings with a default value (e.g., 0)
+    
         
         top_phones = similar_phones_copy.sort_values(by="Price_Difference",ascending=True).head(10)
         top_phones =top_phones.sort_values(by="Ratings",ascending=False)
@@ -181,6 +177,27 @@ elif page == "Phone Recommendations":
     top_phones = filtered_data_copy.sort_values(by=["Score", "Ratings"], ascending=[False, False]).head(10)
 
     # Display top phones
-    st.write(f" <h3 style='color: #FF4B4B;'> Top Rated Phones in Category  '{category}' and Price Range  ₹{min_price} - ₹{max_price}</h3>", unsafe_allow_html=True)
+    st.write(f" <h3 style='color: #FFFFFF;'> Top Rated Phones in Category  <span style='color: #FF4B4B;'>{category}</span> and Price Range  <span style='color: #FF4B4B;'>₹{min_price} - ₹{max_price}</span></h3>", unsafe_allow_html=True)
 
     st.write(top_phones[["Brand", "Mobile Name", "Price", "Ratings", "RAM", "Memory", "Processor Performance"]])
+    
+    
+elif page == "EMI Calculator":
+    st.header("EMI Calculator")
+    st.write("Enter your details to calculate the EMI and the number of months required to pay off the phone.")
+
+    # Input fields for EMI calculation
+    salary = st.number_input("Monthly Salary (in ₹)", min_value=10000, max_value=1000000, value=50000)
+    phone_price = st.number_input("Phone Price (in ₹)", min_value=5000, max_value=200000, value=50000)
+    down_payment = st.number_input("Down Payment (in ₹)", min_value=0, max_value=200000, value=10000)
+    interest_rate = st.number_input("Interest Rate (% per annum)", min_value=0.0, max_value=30.0, value=12.0)
+    emi_tenure = st.number_input("EMI Tenure (in months)", min_value=1, max_value=36, value=12)
+
+    # Calculate EMI
+    if st.button("Calculate EMI"):
+        loan_amount = phone_price - down_payment
+        monthly_interest_rate = interest_rate / 12 / 100
+        emi = (loan_amount * monthly_interest_rate * (1 + monthly_interest_rate) ** emi_tenure) / ((1 + monthly_interest_rate) ** emi_tenure - 1)
+        st.success(f"Monthly EMI: ₹{emi:.2f}")
+        st.success(f"Total Repayment Amount: ₹{(emi * emi_tenure):.2f}")
+        st.success(f"Total Interest Paid: ₹{((emi * emi_tenure) - loan_amount):.2f}")
