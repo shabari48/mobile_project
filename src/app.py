@@ -8,27 +8,27 @@ import time
 # Load your dataset, regression model, classification model, and scaler
 @st.cache_data
 def load_data():
-    data = pd.read_csv("../data/processed/unique.csv")
+    data = pd.read_csv("unique.csv")
     return data
 
 @st.cache_data
 def load_regression_model():
-    model = joblib.load("../models/myreg.joblib")
+    model = joblib.load("myreg.joblib")
     return model
 
 @st.cache_data
 def load_classification_model():
-    model = joblib.load("../models/myclassify.joblib")
+    model = joblib.load("myclassify.joblib")
     return model
 
 @st.cache_data
 def load_mainscaler():
-    scaler = joblib.load("../models/mainscaler.joblib")
+    scaler = joblib.load("mainscaler.joblib")
     return scaler
 
 @st.cache_data
 def load_kmeanscaler():
-    scaler = joblib.load("../models/kmeanscaler.joblib")
+    scaler = joblib.load("kmeanscaler.joblib")
     return scaler
 
 data = load_data()
