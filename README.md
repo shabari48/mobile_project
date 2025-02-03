@@ -105,5 +105,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 For any questions or suggestions, please feel free to contact us at [shabariprakashsv@gmail.com](mailto:shabariprakashsv@gmail.com).
 
 ---
-
-This `README.md` file provides a comprehensive overview of the project, including its structure, setup instructions, data and model details, and information about the Streamlit app. You can customize it further based on your specific requirements and project details.
