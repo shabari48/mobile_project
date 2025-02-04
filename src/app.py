@@ -4,8 +4,9 @@ import joblib
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import time
+import matplotlib.pyplot as plt
 
-# Load your dataset, regression model, classification model, and scaler
+# Load  dataset, regression model, classification model, and scaler
 @st.cache_data
 def load_data():
     data = pd.read_csv("../data/processed/unique.csv")
@@ -31,9 +32,16 @@ def load_kmeanscaler():
     scaler = joblib.load("../models/kmeanscaler.joblib")
     return scaler
 
+@st.cache_data
+def load_shasha():
+    model=joblib.load("../models/shashaclassify.joblib")
+    return model
+    
+
 data = load_data()
 regression_model = load_regression_model()
 classification_model = load_classification_model()
+shasha_model=load_shasha()
 mainscaler = load_mainscaler()
 kmeanscaler = load_kmeanscaler()
 
@@ -56,7 +64,7 @@ categories = {
 # Streamlit app layout
 st.title("Phone Price Prediction and Recommendation System")
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Price Prediction", "Phone Recommendations", "EMI Calculator"])
+page = st.sidebar.radio("Go to", ["Price Prediction", "Phone Recommendations","Phone Feature Comparison","EMI Calculator"])
 
 
 if page == "Price Prediction":
@@ -65,7 +73,7 @@ if page == "Price Prediction":
     st.write("Enter the features of the phone to predict its price.")
 
     # Input fields for features
-    battery = st.number_input("Battery Power (in mAh)", min_value=533, max_value=7000, value=4000)
+    battery = st.number_input("Battery Power (in mAh)", min_value=500, max_value=2000, value=1000)
     ram = st.pills("RAM", ["3GB", "4GB", "6GB", "8GB", "12GB", "16GB", "24GB"], default="6GB")
     memory = st.pills("Memory", ["32GB", "64GB", "128GB", "256GB", "512GB", "1TB"], default="128GB")
     processor = st.number_input("Processor Performance", min_value=0.0, max_value=5.0, value=3.0)
@@ -98,11 +106,15 @@ if page == "Price Prediction":
     # Predict button
     if st.button("Predict Price",icon="🔮"):
         
+        #Progress Bar
         progress_bar = st.progress(0)
 
         for i in range(100):
-            progress_bar.progress(i + 1,text=f"We are choosing the best mobiles for you... {i + 1}%")
+            progress_bar.progress(i + 1,text=f"We are picking the best mobiles for you... {i + 1}%")
             time.sleep(0.02) 
+            
+        
+        # Input data for prediction
             
         input_data = pd.DataFrame({
             "Battery Power(in mAh)": [battery],
@@ -113,34 +125,52 @@ if page == "Price Prediction":
             "Front Camera (in MP)": [front_camera]
         })
 
-        # Standardize the input data
         input_data_scaled = mainscaler.transform(input_data)
 
-        # Make predictions
+        # Predict price and category
         predicted_price = regression_model.predict(input_data_scaled)[0]
         predicted_category = classification_model.predict(input_data_scaled)[0]
+        predicted_category_shasha=shasha_model.predict(input_data_scaled)[0]
+        
+      
+        # Display the predicted price and category
+        
+        class_map={
+            0:"Flagship",
+            1:"Mid Range",
+            2:"Budget"
+        }
+        
         st.success(f"Predicted Price: ₹{predicted_price:.2f}")
-        st.success(f"Predicted Category: {predicted_category}")
-
-        # Include the predicted price in the input data for clustering
+        st.success(f"Predicted Category by Sklearn: {class_map[predicted_category]}")
+        st.success(f"Predicted Category by Shasha: {class_map[predicted_category_shasha]}")
+        
+        # Find similar phones using clustering
+        
         input_data_with_price = input_data.copy()
         input_data_with_price['Price'] = predicted_price
 
-        # Apply clustering algorithm to find similar phones
-        num_clusters = 3
+        
+        num_clusters = 4
         kmeans = KMeans(n_clusters=num_clusters, random_state=42)
 
-        # Scale the data for clustering, including the price
+        # Fit KMeans clustering model
+        
         data_scaled = kmeanscaler.transform(data[["Battery Power(in mAh)", "RAM", "Memory", "Processor Performance", "Primary Camera (in MP)", "Front Camera (in MP)", "Price"]])
         data["Cluster"] = kmeans.fit_predict(data_scaled)
 
-        # Find the cluster of the predicted phone
+       # Predict cluster for input data
+       
         input_data_with_price_scaled = kmeanscaler.transform(input_data_with_price)
         input_data_cluster = kmeans.predict(input_data_with_price_scaled)[0]
+        
+        
+        # Filter data based on cluster
 
-        # Filter phones in the same cluster
         similar_phones = data[data["Cluster"] == input_data_cluster]
         
+        
+        #Pick top 10 phones based on price difference and ratings
         similar_phones_copy = similar_phones.copy()
         similar_phones_copy["Price_Difference"] = abs(similar_phones["Price"] - predicted_price)
     
@@ -149,21 +179,32 @@ if page == "Price Prediction":
         top_phones =top_phones.sort_values(by="Ratings",ascending=False)
 
         # Display the top phones
-        st.write(f" <h3 style='color: #FF4B4B;'> These are the 10 Phones that may interest you </h3>", unsafe_allow_html=True)
+        st.write(f" <h3 style='color: #FF4B4B;'> These are the top 10 Phones that might interest you </h3>", unsafe_allow_html=True)
         st.write(top_phones[["Brand", "Mobile Name", "Price", "Ratings", "RAM", "Memory", "Processor Performance"]])
+        
+        
 
 elif page == "Phone Recommendations":
     st.header("We suggest you the best phones based on your preferences.")
-    st.write("Select a category and price range to get top phone recommendations.")
+    st.write("Select a category, brand, and price range to get top phone recommendations.")
 
     # Dropdown for category selection
     category = st.selectbox("Select Category", list(categories.keys()))
+
+    # Dropdown for brand selection
+    unique_brands = data["Brand"].unique().tolist()  # Get unique brands from the dataset
+    unique_brands.insert(0, "All Brands")  # Add "All Brands" as the default option
+    selected_brand = st.selectbox("Select Brand", unique_brands)
 
     # Slider for price range selection
     min_price, max_price = st.slider("Select Price Range", min_value=int(data["Price"].min()), max_value=int(data["Price"].max()), value=(int(data["Price"].min()), int(data["Price"].max())))
 
     # Filter data based on selected price range
     filtered_data = data[(data["Price"] >= min_price) & (data["Price"] <= max_price)]
+
+    # Further filter data based on selected brand (if not "All Brands")
+    if selected_brand != "All Brands":
+        filtered_data = filtered_data[filtered_data["Brand"] == selected_brand]
 
     # Get criteria and weights for the selected category
     criteria = categories[category]["criteria"]
@@ -177,10 +218,58 @@ elif page == "Phone Recommendations":
     top_phones = filtered_data_copy.sort_values(by=["Score", "Ratings"], ascending=[False, False]).head(10)
 
     # Display top phones
-    st.write(f" <h3 style='color: #FFFFFF;'> Top Rated Phones in Category  <span style='color: #FF4B4B;'>{category}</span> and Price Range  <span style='color: #FF4B4B;'>₹{min_price} - ₹{max_price}</span></h3>", unsafe_allow_html=True)
+    st.write(f" <h3 style='color: #FFFFFF;'> Top Rated Phones in Category  <span style='color: #FF4B4B;'>{category}</span>, Brand  <span style='color: #FF4B4B;'>{selected_brand}</span>, and Price Range  <span style='color: #FF4B4B;'>₹{min_price} - ₹{max_price}</span></h3>", unsafe_allow_html=True)
 
     st.write(top_phones[["Brand", "Mobile Name", "Price", "Ratings", "RAM", "Memory", "Processor Performance"]])
-    
+
+
+elif page == "Phone Feature Comparison":
+    st.header("Phone Feature Comparison Visualizations")
+    st.write("Select two phones and compare their features dynamically.")
+
+    # Dropdowns for phone selection
+    phone1 = st.selectbox("Select First Phone", data["Mobile Name"].unique())
+    phone2 = st.selectbox("Select Second Phone", data["Mobile Name"].unique(), index=1)
+
+    # Dynamic feature selection
+    features = ["Battery Power(in mAh)", "RAM", "Memory", "Processor Performance",
+                 "Primary Camera (in MP)", "Front Camera (in MP)"]
+    selected_features = st.multiselect("Select Features to Compare", features, default=features[:3])
+
+    if phone1 == phone2:
+        st.warning("Please select two different phones for comparison.")
+    elif selected_features:
+        # Extract selected phone data
+        phone1_data = data[data["Mobile Name"] == phone1][selected_features].iloc[0]
+        phone2_data = data[data["Mobile Name"] == phone2][selected_features].iloc[0]
+
+        # Plot bar graph for comparison
+        fig, ax = plt.subplots(figsize=(10, 5))
+        index = range(len(selected_features))
+        bar_width = 0.35
+
+        # Create the bars
+        ax.bar(index, phone1_data, bar_width, label=phone1, color="#3B6790")
+        ax.bar([i + bar_width for i in index], phone2_data, bar_width, label=phone2, color="#EFB036")
+
+        # Add value labels on top of bars
+        for i, v in enumerate(phone1_data):
+            ax.text(i, v, f'{v:,.0f}', ha='center', va='bottom')
+        for i, v in enumerate(phone2_data):
+            ax.text(i + bar_width, v, f'{v:,.0f}', ha='center', va='bottom')
+
+        ax.set_xlabel("Features")
+        ax.set_ylabel("Values")
+        ax.set_title("Phone Feature Comparison")
+        ax.set_xticks([i + bar_width / 2 for i in index])
+        ax.set_xticklabels(selected_features, rotation=45)
+        ax.legend()
+
+        st.pyplot(fig)
+        
+    else:
+        st.warning("Please select at least one feature to compare.")
+ 
     
 elif page == "EMI Calculator":
     st.header("EMI Calculator")
