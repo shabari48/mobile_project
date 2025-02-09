@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import time
 import matplotlib.pyplot as plt
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Load  dataset, regression model, classification model, and scaler
 @st.cache_data
@@ -191,6 +192,18 @@ elif page == "Phone Recommendations":
     # Dropdown for category selection
     category = st.selectbox("Select Category", list(categories.keys()))
 
+    # Create an example phone with desirable features based on the selected category
+    category_info = categories[category]
+    category_criteria = category_info["criteria"]
+    category_weights = category_info["weights"]
+    
+    example_phone = {}
+    for criterion, weight in zip(category_criteria, category_weights):
+        example_phone[criterion] = data[criterion].mean() * weight
+
+    # Convert example phone to DataFrame
+    example_phone_df = pd.DataFrame([example_phone])
+
     # Dropdown for brand selection
     unique_brands = data["Brand"].unique().tolist()  # Get unique brands from the dataset
     unique_brands.insert(0, "All Brands")  # Add "All Brands" as the default option
@@ -206,21 +219,31 @@ elif page == "Phone Recommendations":
     if selected_brand != "All Brands":
         filtered_data = filtered_data[filtered_data["Brand"] == selected_brand]
 
-    # Get criteria and weights for the selected category
-    criteria = categories[category]["criteria"]
-    weights = categories[category]["weights"]
+    # Calculate cosine similarity between example phone and filtered data
+    scaler = StandardScaler()
+    filtered_data_scaled = scaler.fit_transform(filtered_data[category_criteria])
+    example_phone_scaled = scaler.transform(example_phone_df[category_criteria])
+    similarity_scores = cosine_similarity(example_phone_scaled, filtered_data_scaled)[0]
 
-    # Calculate weighted scores for each phone
-    filtered_data_copy = filtered_data.copy()
-    filtered_data_copy["Score"] = filtered_data_copy[criteria].dot(weights)
+    # Add similarity scores to filtered data
+    filtered_data['Similarity_Score'] = similarity_scores
 
-    # Sort the filtered data based on scores and ratings
-    top_phones = filtered_data_copy.sort_values(by=["Score", "Ratings"], ascending=[False, False]).head(10)
+    # Sort by similarity score and ratings
+    top_phones = filtered_data.sort_values(by='Similarity_Score', ascending=False).head(10)
+    top_phones= top_phones.sort_values(by='Ratings',ascending=False)
 
-    # Display top phones
-    st.write(f" <h3 style='color: #FFFFFF;'> Top Rated Phones in Category  <span style='color: #FF4B4B;'>{category}</span>, Brand  <span style='color: #FF4B4B;'>{selected_brand}</span>, and Price Range  <span style='color: #FF4B4B;'>₹{min_price} - ₹{max_price}</span></h3>", unsafe_allow_html=True)
+    # Display top phones for selected category
+    st.write(f"\n### Top Recommendations for {category}")
+    features_to_display = ["Brand", "Mobile Name", "Price", "Ratings"]
+    if category == "Best for Gaming":
+        features_to_display.extend(["RAM", "Memory", "Processor Performance"])
+    elif category == "Best for Camera":
+        features_to_display.extend(["Primary Camera (in MP)", "Front Camera (in MP)"])
+    elif category == "Best for Students":
+        features_to_display.extend(["Battery Power(in mAh)", "Memory"])
 
-    st.write(top_phones[["Brand", "Mobile Name", "Price", "Ratings", "RAM", "Memory", "Processor Performance"]])
+    st.write(top_phones[features_to_display].to_html(index=False), unsafe_allow_html=True)
+   
 
 
 elif page == "Phone Feature Comparison":
